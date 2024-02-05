@@ -73,7 +73,7 @@ async def updateevent(ctx, event_link: str):
     else:
         await ctx.send("You don't have permission to use this command.")
 
-@bot.command(name='help')
+@bot.command(name='eventhelp')
 async def help(ctx):
     # Display help message
     help_message = "Command(s):\n\n" \
