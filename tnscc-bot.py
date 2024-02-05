@@ -1,22 +1,10 @@
 import discord
 from discord.ext import commands
 from bot_token import TOKEN
-import json
-import asyncio
-import os
-
-os.environ['GIT_PYTHON_REFRESH'] = 'quiet'
-
-# Specify the path to the Git executable (either git-bash or git-cmd)
-git_executable_path = '/usr/bin/git'  # or git-cmd.exe
-
-# Set the GIT_PYTHON_GIT_EXECUTABLE environment variable
-os.environ['GIT_PYTHON_GIT_EXECUTABLE'] = git_executable_path
-
 import git
-import re
+import traceback
+from bs4 import BeautifulSoup
 
-# Discord Bot Token
 # Bot Prefix for Commands
 BOT_PREFIX = '/'
 
@@ -33,9 +21,6 @@ bot = commands.Bot(command_prefix=BOT_PREFIX, intents=intents)
 ### Website Function ####
 #########################
 
-# Initialize the Discord bot with intents
-bot = commands.Bot(command_prefix='/', intents=intents)
-
 # Set up a Git repository
 repo = git.Repo('/home/pi/Desktop/tnscc-bot/code-club')
 
@@ -50,42 +35,50 @@ async def updateevent(ctx, event_link: str):
         # Update the HTML file with the new event link
         try:
             html_file_path = '/home/pi/Desktop/tnscc-bot/code-club/events.html'
+
+            # Read HTML content
             with open(html_file_path, 'r', encoding='utf-8') as file:
                 html_content = file.read()
-                # Update the link in HTML content
-                # Updated regular expression for both href and meta tags
-            updated_content = re.sub(
-                r'(href=")https://narwhalnation.newschool.edu/event/\d+(")'
-                r'|'
-                r'(content="0; url=)https://narwhalnation.newschool.edu/event/\d+(")',
-                fr'\1https://narwhalnation.newschool.edu/event/{event_link}\2',
-                html_content
-            )
 
+            # Use BeautifulSoup to modify the HTML content
+            soup = BeautifulSoup(html_content, 'html.parser')
 
+            # Update meta tag
+            meta_tag = soup.find('meta', {'http-equiv': 'refresh'})
+            if meta_tag:
+                meta_tag['content'] = f'0; url={event_link}'
 
-            
-            # Check if the content has actually changed
-            if updated_content != html_content:
-                with open(html_file_path, 'w', encoding='utf-8') as file:
-                    file.write(updated_content)
+            # Update anchor tag
+            anchor_tag = soup.find('a', {'class': 'blink'})
+            if anchor_tag:
+                anchor_tag['href'] = event_link
 
-                # Git pull to ensure the repository is up to date
-                repo.remotes.origin.pull()
+            # Write the updated content back to the HTML file
+            with open(html_file_path, 'w', encoding='utf-8') as file:
+                file.write(str(soup))
 
-                # Git operations (add, commit, push)
-                repo.git.add(A=True)
-                repo.git.commit(m=f'Updated event link: {event_link}')
-                repo.git.push()
+            # Git pull to ensure the repository is up to date
+            repo.remotes.origin.pull()
 
-                await ctx.send('Event link updated and changes pushed to the repository.')
-            else:
-                await ctx.send('No changes detected in the HTML file.')
+            # Git operations (add, commit, push)
+            repo.git.add(A=True)
+            repo.git.commit(m=f'Updated event link: {event_link}')
+            repo.git.push()
+
+            await ctx.send('Event link updated and changes pushed to the repository.')
         except Exception as e:
             print(f'Error updating HTML file: {e}')
+            traceback.print_exc()
             await ctx.send('Error updating HTML file.')
     else:
         await ctx.send("You don't have permission to use this command.")
+
+@bot.command(name='help')
+async def help(ctx):
+    # Display help message
+    help_message = "Command(s):\n\n" \
+                   "/updateevent (event link) - Update the event link in the HTML file.\n"
+    await ctx.send(help_message)
 
 # Run the bot
 bot.run(TOKEN)
